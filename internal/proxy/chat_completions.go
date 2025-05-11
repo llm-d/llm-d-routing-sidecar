@@ -68,8 +68,8 @@ func (s *Server) runLMCacheProtocol(w http.ResponseWriter, r *http.Request, pref
 	ctx := r.Context()
 	preq := r.Clone(ctx)
 
-	completionRequest["max_tokens"] = 1
-	completionRequest["max_completion_tokens"] = 1
+	completionRequest[RequestFieldMaxTokens] = 1
+	completionRequest[RequestFieldMaxCompletionTokens] = 1
 
 	pbody, err := json.Marshal(completionRequest)
 	if err != nil {
@@ -148,8 +148,12 @@ func (s *Server) runNIXLProtocol(w http.ResponseWriter, r *http.Request, prefill
 	streamValue, streamOk := completionRequest[RequestFieldStream]
 	streamOptionsValue, streamOptionsOk := completionRequest[RequestFieldStreamOptions]
 
-	completionRequest[RequestFieldDoRemoteDecode] = true
 	completionRequest[RequestFieldStream] = false
+
+	kvParams := map[string]any{}
+	kvParams[RequestFieldKVDoRemoteDecode] = true
+	completionRequest[RequestFieldKVTransferParams] = kvParams
+
 	delete(completionRequest, RequestFieldStreamOptions)
 
 	pbody, err := json.Marshal(completionRequest)
@@ -192,35 +196,47 @@ func (s *Server) runNIXLProtocol(w http.ResponseWriter, r *http.Request, prefill
 
 	// 1. Verify fields exists
 
-	blockIDs, ok := prefillerResponse[RequestFieldRemoteBlockIDs]
+	kvParamsPrefillRaw, ok := prefillerResponse[RequestFieldKVTransferParams]
 	if !ok {
-		// TODO: error or ignore?
-		s.logger.Info("warning: missing 'remote_block_ids' field in prefiller response")
+		s.logger.Info("warning: missing 'kv_transfer_params' section in prefiller response")
+		return
 	}
 
-	engineID, ok := prefillerResponse[RequestFieldRemoteEngineID]
+	kvParamsPrefill, ok := kvParamsPrefillRaw.(map[string]any)
 	if !ok {
-		// TODO: error or ignore?
-		s.logger.Info("warning: missing 'remote_engine_id' field in prefiller response")
+		s.logger.Info("warning: 'kv_transfer_params' field is not a valid object in prefiller response")
+		return
 	}
 
-	remoteHost, ok := prefillerResponse[RequestFieldRemoteHost]
+	blockIDs, ok := kvParamsPrefill[RequestFieldKVRemoteBlockIDs]
 	if !ok {
-		// TODO: error or ignore?
-		s.logger.Info("warning: missing 'remote_host' field in prefiller response")
+		s.logger.Info("warning: missing 'remote_block_ids' field in kv_transfer_params in prefiller response")
 	}
 
-	remotePort, ok := prefillerResponse[RequestFieldRemotePort]
+	engineID, ok := kvParamsPrefill[RequestFieldKVRemoteEngineID]
 	if !ok {
 		// TODO: error or ignore?
-		s.logger.Info("warning: missing 'remote_port' field in prefiller response")
+		s.logger.Info("warning: missing 'remote_engine_id' field in kv_transfer_params in prefiller response")
 	}
 
+	remoteHost, ok := kvParamsPrefill[RequestFieldKVRemoteHost]
+	if !ok {
+		// TODO: error or ignore?
+		s.logger.Info("warning: missing 'remote_host' field in kv_transfer_params in prefiller response")
+	}
+
+	remotePort, ok := kvParamsPrefill[RequestFieldKVRemotePort]
+	if !ok {
+		// TODO: error or ignore?
+		s.logger.Info("warning: missing 'remote_port' field in kv_transfer_params in prefiller response")
+	}
+
+	// Log what we got
 	s.logger.Info("received prefiller response",
-		RequestFieldRemoteBlockIDs, blockIDs,
-		RequestFieldRemoteEngineID, engineID,
-		RequestFieldRemoteHost, remoteHost,
-		RequestFieldRemotePort, remotePort,
+		RequestFieldKVRemoteBlockIDs, blockIDs,
+		RequestFieldKVRemoteEngineID, engineID,
+		RequestFieldKVRemoteHost, remoteHost,
+		RequestFieldKVRemotePort, remotePort,
 	)
 
 	// 2. Prepare decode request
@@ -228,7 +244,7 @@ func (s *Server) runNIXLProtocol(w http.ResponseWriter, r *http.Request, prefill
 
 	dreq.Header.Add(RequestHeaderRequestID, uuidStr)
 
-	delete(completionRequest, RequestFieldDoRemoteDecode)
+	delete(kvParams, RequestFieldKVDoRemoteDecode)
 	delete(completionRequest, RequestFieldStream)
 	if streamOk {
 		completionRequest[RequestFieldStream] = streamValue
@@ -237,11 +253,11 @@ func (s *Server) runNIXLProtocol(w http.ResponseWriter, r *http.Request, prefill
 		completionRequest[RequestFieldStreamOptions] = streamOptionsValue
 	}
 
-	completionRequest[RequestFieldDoRemotePrefill] = true
-	completionRequest[RequestFieldRemoteBlockIDs] = blockIDs
-	completionRequest[RequestFieldRemoteEngineID] = engineID
-	completionRequest[RequestFieldRemoteHost] = remoteHost
-	completionRequest[RequestFieldRemotePort] = remotePort
+	kvParams[RequestFieldKVDoRemotePrefill] = true
+	kvParams[RequestFieldKVRemoteBlockIDs] = blockIDs
+	kvParams[RequestFieldKVRemoteEngineID] = engineID
+	kvParams[RequestFieldKVRemoteHost] = remoteHost
+	kvParams[RequestFieldKVRemotePort] = remotePort
 
 	dbody, err := json.Marshal(completionRequest)
 	if err != nil {

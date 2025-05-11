@@ -52,7 +52,7 @@ func (cc *ChatCompletionHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	}
 
 	if cc.Connector == "nixl" {
-		raw := []byte(`{"remote_block_ids":[1, 2, 3], "remote_engine_id": "5b5fb28f-3f30-4bdd-9a36-958d52459200"}`)
+		raw := []byte(`{"kv_transfer_params": {"remote_block_ids":[1, 2, 3], "remote_engine_id": "5b5fb28f-3f30-4bdd-9a36-958d52459200"}}`)
 
 		var completionResponse map[string]any
 		if err := json.Unmarshal(raw, &completionResponse); err != nil {

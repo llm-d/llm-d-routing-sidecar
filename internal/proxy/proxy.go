@@ -33,15 +33,22 @@ const (
 	RequestHeaderPrefillURL = "x-prefiller-url"
 	RequestHeaderRequestID  = "x-request-id"
 
-	RequestFieldDoRemotePrefill = "do_remote_prefill"
-	RequestFieldDoRemoteDecode  = "do_remote_decode"
-	RequestFieldRemoteBlockIDs  = "remote_block_ids"
-	RequestFieldRemoteEngineID  = "remote_engine_id"
-	RequestFieldRemoteHost      = "remote_host"
-	RequestFieldRemotePort      = "remote_port"
-	RequestFieldStream          = "stream"
-	RequestFieldStreamOptions   = "stream_options"
+	// NIXL specific
+	RequestFieldKVTransferParams  = "kv_transfer_params"
+	RequestFieldKVDoRemotePrefill = "do_remote_prefill"
+	RequestFieldKVDoRemoteDecode  = "do_remote_decode"
+	RequestFieldKVRemoteBlockIDs  = "remote_block_ids"
+	RequestFieldKVRemoteEngineID  = "remote_engine_id"
+	RequestFieldKVRemoteHost      = "remote_host"
+	RequestFieldKVRemotePort      = "remote_port"
 
+	// Request Generic
+	RequestFieldStream              = "stream"
+	RequestFieldStreamOptions       = "stream_options"
+	RequestFieldMaxTokens           = "max_tokens"
+	RequestFieldMaxCompletionTokens = "max_completion_tokens"
+
+	// Connectors
 	ConnectorNIXL    = "nixl"
 	ConnectorLMCache = "lmcache"
 )
