@@ -32,7 +32,6 @@ import (
 )
 
 var _ = Describe("NIXL Connector (v2)", func() {
-
 	var (
 		ctx            context.Context
 		decodeBackend  *httptest.Server
@@ -70,7 +69,6 @@ var _ = Describe("NIXL Connector (v2)", func() {
 	})
 
 	It("should successfully send request to 1. prefill 2. decode with the correct fields", func() {
-
 		By("starting the proxy")
 		go func() {
 			defer GinkgoRecover()
@@ -131,5 +129,4 @@ var _ = Describe("NIXL Connector (v2)", func() {
 		Expect(decodeHandler.RequestCount.Load()).To(BeNumerically("==", 1))
 		Expect(decodeHandler.CompletionRequests).To(HaveLen(1))
 	})
-
 })

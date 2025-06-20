@@ -32,9 +32,7 @@ import (
 )
 
 var _ = Describe("Reverse Proxy", func() {
-
 	When("x-prefiller-url is not present", func() {
-
 		DescribeTable("should forward requests to decode server",
 
 			func(path string, connector string) {
@@ -133,7 +131,6 @@ var _ = Describe("Reverse Proxy", func() {
 			})
 
 			It("should successfully send request to 1. prefill 2. decode with the right fields", func() {
-
 				By("starting the proxy")
 				go func() {
 					defer GinkgoRecover()
@@ -182,9 +179,7 @@ var _ = Describe("Reverse Proxy", func() {
 
 				Expect(drq1).To(HaveKey(requestFieldRemoteBlockIDs))
 				Expect(drq1).To(HaveKey(requestFieldRemoteEngineID))
-
 			})
-
 		})
 	})
 })

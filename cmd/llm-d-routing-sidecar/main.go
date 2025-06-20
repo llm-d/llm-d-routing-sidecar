@@ -20,9 +20,10 @@ import (
 	"flag"
 	"net/url"
 
+	"k8s.io/klog/v2"
+
 	"github.com/llm-d/llm-d-routing-sidecar/internal/proxy"
 	"github.com/llm-d/llm-d-routing-sidecar/internal/signals"
-	"k8s.io/klog/v2"
 )
 
 func main() {

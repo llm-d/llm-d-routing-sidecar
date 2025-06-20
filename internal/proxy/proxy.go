@@ -136,7 +136,7 @@ func (s *Server) createRoutes() *http.ServeMux {
 	mux.HandleFunc("POST "+ChatCompletionsPath, s.chatCompletionsHandler) // /v1/chat/completions (openai)
 	mux.HandleFunc("POST "+CompletionsPath, s.chatCompletionsHandler)     // /v1/completions (legacy)
 
-	// passthru decoder handler
+	// Passthrough decoder handler
 	s.decoderProxy = httputil.NewSingleHostReverseProxy(s.decoderURL)
 	mux.Handle("/", s.decoderProxy)
 
