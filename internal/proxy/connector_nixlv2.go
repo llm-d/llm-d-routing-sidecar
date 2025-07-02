@@ -59,8 +59,7 @@ func (s *Server) runNIXLProtocolV2(w http.ResponseWriter, r *http.Request, prefi
 	// Prefill Stage
 
 	// 1. Prepare prefill request
-	ctx := r.Context()
-	preq := r.Clone(ctx)
+	preq := r.Clone(r.Context())
 
 	preq.Header.Add(requestHeaderRequestID, uuidStr)
 
@@ -131,7 +130,7 @@ func (s *Server) runNIXLProtocolV2(w http.ResponseWriter, r *http.Request, prefi
 	// Decode Stage
 
 	// 1. Prepare decode request
-	dreq := r.Clone(ctx)
+	dreq := r.Clone(r.Context())
 
 	dreq.Header.Add(requestHeaderRequestID, uuidStr)
 
@@ -159,7 +158,6 @@ func (s *Server) runNIXLProtocolV2(w http.ResponseWriter, r *http.Request, prefi
 	dreq.ContentLength = int64(len(dbody))
 
 	// 2. Forward to local decoder.
-
 	s.logger.V(5).Info("sending request to decoder", "body", string(dbody))
 	s.decoderProxy.ServeHTTP(w, dreq)
 }
