@@ -25,6 +25,7 @@ import (
 
 	"github.com/llm-d/llm-d-routing-sidecar/internal/proxy"
 	"github.com/llm-d/llm-d-routing-sidecar/internal/signals"
+	"github.com/llm-d/llm-d-routing-sidecar/internal/tracing"
 )
 
 func main() {
@@ -53,6 +54,14 @@ func main() {
 	ctx := signals.SetupSignalHandler(context.Background())
 	logger := klog.FromContext(ctx)
 
+	tracingConfig := tracing.NewConfigFromEnv()
+	if tracingShutdown, err := tracing.Initialize(ctx, tracingConfig); err != nil {
+		logger.Error(err, "failed to setup tracing")
+	} else {
+		defer tracingShutdown()
+		logger.Info("tracing initialized", "enabled", tracingConfig.Enabled)
+	}
+
 	if *connector != proxy.ConnectorNIXLV1 && *connector != proxy.ConnectorNIXLV2 && *connector != proxy.ConnectorLMCache {
 		logger.Info("Error: --connector must either be 'nixl', 'nixlv2' or 'lmcache'")
 		return
@@ -60,7 +69,7 @@ func main() {
 	if *connector == proxy.ConnectorNIXLV1 {
 		logger.Info("Warning: nixl connector is deprecated and will be removed in a future release in favor of --connector=nixlv2")
 	}
-	logger.Info("p/d connector validated", "connector", connector)
+	logger.Info("p/d connector validated", "connector", *connector)
 
 	// Determine namespace and pool name for SSRF protection
 	if *enableSSRFProtection {
