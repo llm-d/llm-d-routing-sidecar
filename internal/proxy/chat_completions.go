@@ -53,7 +53,7 @@ func (s *Server) chatCompletionsHandler(w http.ResponseWriter, r *http.Request) 
 			attribute.Bool("llm_d.proxy.disaggregated_prefill", false),
 		)
 		// Update the request context for downstream handlers
-		*r = *r.WithContext(ctx)
+		r = r.WithContext(ctx)
 		s.decoderProxy.ServeHTTP(w, r)
 		return
 	}
@@ -63,6 +63,6 @@ func (s *Server) chatCompletionsHandler(w http.ResponseWriter, r *http.Request) 
 		attribute.String(tracing.AttrProxyPrefillerURL, prefillPodURL),
 	)
 
-	*r = *r.WithContext(ctx)
+	r = r.WithContext(ctx)
 	s.runConnectorProtocol(w, r, prefillPodURL)
 }
