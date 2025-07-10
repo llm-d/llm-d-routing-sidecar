@@ -24,11 +24,11 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
 	"github.com/go-logr/logr"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"k8s.io/klog/v2"
 )
 
@@ -70,16 +70,17 @@ type Server struct {
 	runConnectorProtocol protocolRunner // the handler for running the protocol
 	prefillerURLPrefix   string
 
-	prefillerProxies   map[string]http.Handler // cached prefiller proxy handlers
-	prefillerProxiesMu sync.RWMutex
+	prefillerProxies *lru.Cache[string, http.Handler] // cached prefiller proxy handlers
 }
 
 // NewProxy creates a new routing reverse proxy
 func NewProxy(port string, decodeURL *url.URL, connector string, prefillerUseTLS bool) *Server {
+	cache, _ := lru.New[string, http.Handler](16) // nolint:all
+
 	server := &Server{
 		port:               port,
 		decoderURL:         decodeURL,
-		prefillerProxies:   make(map[string]http.Handler),
+		prefillerProxies:   cache,
 		prefillerURLPrefix: "http://",
 	}
 	switch connector {
@@ -166,10 +167,7 @@ func (s *Server) createRoutes() *http.ServeMux {
 }
 
 func (s *Server) prefillerProxyHandler(hostPort string) (http.Handler, error) {
-	s.prefillerProxiesMu.RLock()
-	proxy, exists := s.prefillerProxies[hostPort]
-	s.prefillerProxiesMu.RUnlock()
-
+	proxy, exists := s.prefillerProxies.Get(hostPort)
 	if exists {
 		return proxy, nil
 	}
@@ -184,10 +182,7 @@ func (s *Server) prefillerProxyHandler(hostPort string) (http.Handler, error) {
 	}
 
 	proxy = httputil.NewSingleHostReverseProxy(u)
-
-	s.prefillerProxiesMu.Lock()
-	s.prefillerProxies[hostPort] = proxy
-	s.prefillerProxiesMu.Unlock()
+	s.prefillerProxies.Add(hostPort, proxy)
 
 	return proxy, nil
 }
