@@ -28,6 +28,8 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/llm-d/llm-d-routing-sidecar/internal/tracing"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"k8s.io/klog/v2"
 )
 
@@ -66,6 +68,7 @@ type Server struct {
 	decoderURL           *url.URL       // the local decoder URL
 	decoderProxy         http.Handler   // decoder proxy handler
 	runConnectorProtocol protocolRunner // the handler for running the protocol
+	connector            string         // the connector type for tracing
 
 	prefillerProxies   map[string]http.Handler // cached prefiller proxy handlers
 	prefillerProxiesMu sync.RWMutex
@@ -76,6 +79,7 @@ func NewProxy(port string, decodeURL *url.URL, connector string) *Server {
 	server := &Server{
 		port:             port,
 		decoderURL:       decodeURL,
+		connector:        connector,
 		prefillerProxies: make(map[string]http.Handler),
 	}
 	switch connector {
@@ -107,7 +111,14 @@ func (s *Server) Start(ctx context.Context) error {
 	// Configure handlers
 	mux := s.createRoutes()
 
-	server := &http.Server{Handler: mux}
+	// Wrap the server with OpenTelemetry HTTP instrumentation
+	handler := otelhttp.NewHandler(mux, "routing-proxy-server",
+		otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
+			return tracing.OperationProxyRequest
+		}),
+	)
+
+	server := &http.Server{Handler: handler}
 
 	// Setup graceful termination (not strictly needed for sidecars)
 	go func() {

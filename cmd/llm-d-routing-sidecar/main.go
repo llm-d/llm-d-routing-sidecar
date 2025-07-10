@@ -24,6 +24,7 @@ import (
 
 	"github.com/llm-d/llm-d-routing-sidecar/internal/proxy"
 	"github.com/llm-d/llm-d-routing-sidecar/internal/signals"
+	"github.com/llm-d/llm-d-routing-sidecar/internal/tracing"
 )
 
 func main() {
@@ -44,6 +45,14 @@ func main() {
 
 	ctx := signals.SetupSignalHandler(context.Background())
 	logger := klog.FromContext(ctx)
+
+	tracingConfig := tracing.NewConfigFromEnv()
+	if tracingShutdown, err := tracing.Initialize(ctx, tracingConfig); err != nil {
+		logger.Error(err, "failed to setup tracing")
+	} else {
+		defer tracingShutdown()
+		logger.Info("tracing initialized", "enabled", tracingConfig.Enabled)
+	}
 
 	if connector != proxy.ConnectorNIXLV1 && connector != proxy.ConnectorNIXLV2 && connector != proxy.ConnectorLMCache {
 		logger.Info("Error: --connector must either be 'nixl', 'nixlv2' or 'lmcache'")

@@ -21,45 +21,73 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/llm-d/llm-d-routing-sidecar/internal/tracing"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func (s *Server) runNIXLProtocolV2(w http.ResponseWriter, r *http.Request, prefillPodURL string) {
+	ctx, span := tracing.StartProxySpan(r.Context(), tracing.OperationNIXLV2Protocol, ConnectorNIXLV2)
+	defer span.End()
+
+	start := time.Now()
 	s.logger.V(4).Info("running NIXL protocol V2", "url", prefillPodURL)
+	span.SetAttributes(
+		attribute.String(tracing.AttrProxyPrefillerURL, prefillPodURL),
+	)
 
 	// Read request body
 	defer r.Body.Close() //nolint:all
 	original, err := io.ReadAll(r.Body)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to read request body")
 		w.WriteHeader(http.StatusBadRequest) // TODO: check FastAPI error code when failing to read body
 		w.Write([]byte(err.Error()))         //nolint:all
 		return
 	}
 
+	span.SetAttributes(attribute.Int(tracing.AttrHTTPRequestBodySize, len(original)))
+
 	// Parse completion request
 	var completionRequest map[string]any
 	if err := json.Unmarshal(original, &completionRequest); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to parse JSON request")
 		if err := errorJSONInvalid(err, w); err != nil {
 			s.logger.Error(err, "failed to send error response to client")
 		}
 		return
 	}
 
+	// Extract model and other attributes from request for tracing
+	if model, ok := completionRequest["model"].(string); ok {
+		span.SetAttributes(attribute.String(tracing.AttrGenAIRequestModel, model))
+	}
+	if maxTokens, ok := completionRequest["max_tokens"].(float64); ok {
+		span.SetAttributes(attribute.Int(tracing.AttrGenAIRequestMaxTokens, int(maxTokens)))
+	}
+
 	// Generate unique request UUID
 	uuid, err := uuid.NewUUID()
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to generate request UUID")
 		if err := errorBadGateway(err, w); err != nil {
 			s.logger.Error(err, "failed to send error response to client")
 		}
 		return
 	}
 	uuidStr := uuid.String()
+	span.SetAttributes(attribute.String(tracing.AttrGenAIResponseID, uuidStr))
 
 	// Prefill Stage
 
 	// 1. Prepare prefill request
-	ctx := r.Context()
 	preq := r.Clone(ctx)
 
 	preq.Header.Add(requestHeaderRequestID, uuidStr)
@@ -93,6 +121,8 @@ func (s *Server) runNIXLProtocolV2(w http.ResponseWriter, r *http.Request, prefi
 
 	prefillHandler, err := s.prefillerProxyHandler(prefillPodURL)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to create prefiller proxy handler")
 		if err := errorBadGateway(err, w); err != nil {
 			s.logger.Error(err, "failed to send error response to client")
 		}
@@ -100,15 +130,32 @@ func (s *Server) runNIXLProtocolV2(w http.ResponseWriter, r *http.Request, prefi
 	}
 
 	// 2. Forward request to prefiller
+	prefillerStart := time.Now()
+	_, prefillerSpan := tracing.StartSpan(ctx, tracing.OperationPrefillerForward, trace.SpanKindClient)
+	prefillerSpan.SetAttributes(
+		attribute.String(tracing.AttrProxyPrefillerURL, prefillPodURL),
+	)
+
 	s.logger.V(5).Info("sending request to prefiller", "url", prefillPodURL, "body", string(pbody))
 	pw := &bufferedResponseWriter{}
 	prefillHandler.ServeHTTP(pw, preq)
 
+	prefillerSpan.SetAttributes(
+		attribute.Int(tracing.AttrHTTPStatusCode, pw.statusCode),
+		attribute.Float64("llm_d.proxy.prefiller_duration_ms", float64(time.Since(prefillerStart).Nanoseconds())/1e6),
+	)
+
 	if pw.statusCode < 200 || pw.statusCode >= 300 {
+		prefillerSpan.SetStatus(codes.Error, "prefiller request failed")
+		prefillerSpan.End()
+		span.SetStatus(codes.Error, "prefiller request failed")
 		s.logger.Error(err, "request failed", "code", pw.statusCode)
 		w.WriteHeader(pw.statusCode)
 		return
 	}
+
+	prefillerSpan.SetStatus(codes.Ok, "prefiller request completed")
+	prefillerSpan.End()
 
 	// Process response - extract p/d fields
 	var prefillerResponse map[string]any
@@ -159,7 +206,23 @@ func (s *Server) runNIXLProtocolV2(w http.ResponseWriter, r *http.Request, prefi
 	dreq.ContentLength = int64(len(dbody))
 
 	// 2. Forward to local decoder.
+	decoderStart := time.Now()
+	_, decoderSpan := tracing.StartSpan(ctx, tracing.OperationDecoderForward, trace.SpanKindClient)
+	decoderSpan.SetAttributes(
+		attribute.String(tracing.AttrProxyDecoderURL, s.decoderURL.String()),
+	)
 
 	s.logger.V(5).Info("sending request to decoder", "body", string(dbody))
 	s.decoderProxy.ServeHTTP(w, dreq)
+
+	decoderSpan.SetAttributes(
+		attribute.Float64("llm_d.proxy.decoder_duration_ms", float64(time.Since(decoderStart).Nanoseconds())/1e6),
+	)
+	decoderSpan.End()
+
+	// Record overall protocol timing
+	span.SetAttributes(
+		attribute.Float64(tracing.AttrProxyDecisionTime, float64(time.Since(start).Nanoseconds())/1e6),
+	)
+	span.SetStatus(codes.Ok, "NIXL V2 protocol completed successfully")
 }

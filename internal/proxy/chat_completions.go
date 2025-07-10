@@ -18,6 +18,9 @@ package proxy
 
 import (
 	"net/http"
+
+	"github.com/llm-d/llm-d-routing-sidecar/internal/tracing"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 var (
@@ -29,13 +32,37 @@ var (
 )
 
 func (s *Server) chatCompletionsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx, span := tracing.StartHTTPSpan(r.Context(), tracing.OperationChatCompletions, r.Method, r.URL.Path)
+	defer span.End()
+
 	prefillPodURL := r.Header.Get(requestHeaderPrefillURL)
+	requestID := r.Header.Get(requestHeaderRequestID)
+
+	span.SetAttributes(
+		attribute.String(tracing.AttrProxyConnector, s.connector),
+		attribute.String(tracing.AttrProxyDecoderURL, s.decoderURL.String()),
+	)
+
+	if requestID != "" {
+		span.SetAttributes(attribute.String(tracing.AttrProxyRequestID, requestID))
+	}
 
 	if prefillPodURL == "" {
 		s.logger.V(4).Info("skip disagreggated prefill")
+		span.SetAttributes(
+			attribute.Bool("llm_d.proxy.disaggregated_prefill", false),
+		)
+		// Update the request context for downstream handlers
+		r = r.WithContext(ctx)
 		s.decoderProxy.ServeHTTP(w, r)
 		return
 	}
 
+	span.SetAttributes(
+		attribute.Bool("llm_d.proxy.disaggregated_prefill", true),
+		attribute.String(tracing.AttrProxyPrefillerURL, prefillPodURL),
+	)
+
+	r = r.WithContext(ctx)
 	s.runConnectorProtocol(w, r, prefillPodURL)
 }
