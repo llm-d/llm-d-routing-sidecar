@@ -31,6 +31,7 @@ func main() {
 	vLLMPort := flag.String("vllm-port", "8001", "the port vLLM is listening on")
 	connector := flag.String("connector", "nixl", "the P/D connector being used. Either nixl, nixlv2 or lmcache")
 	prefillerUseTLS := flag.Bool("prefiller-use-tls", false, "whether to use TLS when sending requests to prefillers")
+	decoderUseTLS := flag.Bool("decoder-use-tls", false, "whether to use TLS when sending requests to the decoder")
 	secureProxy := flag.Bool("secure-proxy", true, "Enables secure proxy. Defaults to true.")
 	certPath := flag.String(
 		"cert-path", "", "The path to the certificate for secure proxy. The certificate and private key files "+
@@ -52,9 +53,13 @@ func main() {
 	logger.Info("p/d connector validated", "connector", connector)
 
 	// start reverse proxy HTTP server
-	targetURL, err := url.Parse("http://localhost:" + *vLLMPort)
+	scheme := "http"
+	if *decoderUseTLS {
+		scheme = "https"
+	}
+	targetURL, err := url.Parse(scheme + "://localhost:" + *vLLMPort)
 	if err != nil {
-		logger.Error(err, "Failed to create targetURL")
+		logger.Error(err, "failed to create targetURL")
 		return
 	}
 
@@ -67,6 +72,6 @@ func main() {
 
 	proxy := proxy.NewProxy(*port, targetURL, config)
 	if err := proxy.Start(ctx); err != nil {
-		logger.Error(err, "Failed to start proxy server")
+		logger.Error(err, "failed to start proxy server")
 	}
 }
