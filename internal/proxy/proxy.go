@@ -29,6 +29,7 @@ import (
 
 	"github.com/go-logr/logr"
 	lru "github.com/hashicorp/golang-lru/v2"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/klog/v2"
 )
 
@@ -179,10 +180,20 @@ func (s *Server) prefillerProxyHandler(hostPort string) (http.Handler, error) {
 	if err != nil {
 		s.logger.Error(err, "failed to parse URL", "hostPort", hostPort)
 		return nil, err
+	} else if err := validateTarget(u.Hostname()); err != nil {
+		s.logger.Error(err, "invalid target", "hostPort", hostPort)
+		return nil, err
 	}
 
 	proxy = httputil.NewSingleHostReverseProxy(u)
 	s.prefillerProxies.Add(hostPort, proxy)
 
 	return proxy, nil
+}
+
+func validateTarget(target string) error {
+	if net.ParseIP(target) != nil || len(validation.IsDNS1123Subdomain(target)) == 0 {
+		return nil
+	}
+	return errors.New(target + " is not a valid prefill target")
 }
