@@ -181,8 +181,72 @@ func (s *Server) prefillerProxyHandler(hostPort string) (http.Handler, error) {
 		return nil, err
 	}
 
+	// check if the prefill target IP is "reasonable"
+	targetIP := net.ParseIP(u.Host)
+	if targetIP == nil || !isPrivateOrSpecialIP(targetIP) {
+		s.logger.Error(err, "invalid host", "host", targetIP.String())
+		return nil, err
+	}
+
 	proxy = httputil.NewSingleHostReverseProxy(u)
 	s.prefillerProxies.Add(hostPort, proxy)
 
 	return proxy, nil
+}
+
+// Determine if the provided IP address is in a private (or non-Internet-routable)
+// range. A safer approach would be to validate that it is contained within the
+// cluster's PodCIDR. Unfortunately, there's no standard k8s API for it (i.e.,
+// it is distribution and CNI dependant).
+//
+// Alternative options could be to
+// (1) receive via a command line parameter (shift the responsibility to the
+// operator); or
+// (2) validate against all nodes IP ranges (which requires elevated API access
+// privileges).
+// Neither option is attractive :-(
+func isPrivateOrSpecialIP(ip net.IP) bool {
+	ip = ip.To4() // ensure we only evaluate IPv4 addresses at this time
+	if ip == nil {
+		return false
+	}
+
+	for _, cidr := range specialCIDRs {
+		if cidr.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// Allowed CIDRs
+var (
+	specialCIDRs []*net.IPNet // the allowed subnets
+
+	cidrStrings = []string{ // special or private network ranges
+		"10.0.0.0/8",         // private (from rfc 1918)
+		"172.16.0.0/12",      // private (from rfc 1918)
+		"192.168.0.0/16",     // private (from rfc 1918)
+		"127.0.0.0/8",        // loopback
+		"169.254.0.0/16",     // link-local
+		"100.64.0.0/10",      // carrier-grade NAT
+		"192.0.0.0/24",       // protocol assignments (IETF)
+		"192.0.2.0/24",       // test network
+		"198.18.0.0/15",      // benchmarking
+		"198.51.100.0/24",    // test network
+		"203.0.113.0/24",     // test network
+		"224.0.0.0/4",        // multicast
+		"240.0.0.0/4",        // reserved
+		"0.0.0.0/8",          // "this" network
+		"255.255.255.255/32", // broadcast address
+	}
+)
+
+func init() { // populate the special CIDR array from the subnet strings
+	for _, cidr := range cidrStrings {
+		_, network, err := net.ParseCIDR(cidr)
+		if err == nil {
+			specialCIDRs = append(specialCIDRs, network)
+		}
+	}
 }
