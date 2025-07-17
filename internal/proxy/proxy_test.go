@@ -48,7 +48,8 @@ var _ = Describe("Reverse Proxy", func() {
 				targetURL, err := url.Parse(decodeBackend.URL)
 				Expect(err).ToNot(HaveOccurred())
 
-				proxy := NewProxy("0", targetURL, connector, false) // port 0 to automatically choose one that's available.
+				proxy, err := NewProxy("0", targetURL, connector, false, false, "test-namespace", "test-pool") // port 0 to automatically choose one that's available.
+				Expect(err).ToNot(HaveOccurred())
 
 				ctx, cancelFn := context.WithCancel(ctx)
 				defer cancelFn()
@@ -124,7 +125,9 @@ var _ = Describe("Reverse Proxy", func() {
 			var proxy *Server
 
 			BeforeEach(func() {
-				proxy = NewProxy("0", decodeURL, ConnectorNIXLV1, false) // port 0 to automatically choose one that's available.
+				var err error
+				proxy, err = NewProxy("0", decodeURL, ConnectorNIXLV1, false, false, "test-namespace", "test-pool") // port 0 to automatically choose one that's available.
+				Expect(err).ToNot(HaveOccurred())
 
 				decodeHandler.Connector = ConnectorNIXLV1
 				prefillHandler.Connector = ConnectorNIXLV1

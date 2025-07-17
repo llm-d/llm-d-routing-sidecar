@@ -19,6 +19,7 @@ import (
 	"context"
 	"flag"
 	"net/url"
+	"os"
 
 	"k8s.io/klog/v2"
 
@@ -28,16 +29,22 @@ import (
 
 func main() {
 	var (
-		port            string
-		vLLMPort        string
-		connector       string
-		prefillerUseTLS bool
+		port                   string
+		vLLMPort               string
+		connector              string
+		prefillerUseTLS        bool
+		enableSSRFProtection   bool
+		inferencePoolNamespace string
+		inferencePoolName      string
 	)
 
 	flag.StringVar(&port, "port", "8000", "the port the sidecar is listening on")
 	flag.StringVar(&vLLMPort, "vllm-port", "8001", "the port vLLM is listening on")
 	flag.StringVar(&connector, "connector", "nixl", "the P/D connector being used. Either nixl, nixlv2 or lmcache")
 	flag.BoolVar(&prefillerUseTLS, "prefiller-use-tls", false, "whether to use TLS when sending requests to prefillers")
+	flag.BoolVar(&enableSSRFProtection, "enable-ssrf-protection", false, "enable SSRF protection using InferencePool allowlisting")
+	flag.StringVar(&inferencePoolNamespace, "inference-pool-namespace", "", "the Kubernetes namespace to watch for InferencePool resources (defaults to INFERENCE_POOL_NAMESPACE env var)")
+	flag.StringVar(&inferencePoolName, "inference-pool-name", "", "the specific InferencePool name to watch (defaults to INFERENCE_POOL_NAME env var)")
 	klog.InitFlags(nil)
 	flag.Parse()
 
@@ -53,6 +60,28 @@ func main() {
 	}
 	logger.Info("p/d connector validated", "connector", connector)
 
+	// Determine namespace and pool name for SSRF protection
+	if enableSSRFProtection {
+		// Priority: command line flag > environment variable
+		if inferencePoolNamespace == "" {
+			inferencePoolNamespace = os.Getenv("INFERENCE_POOL_NAMESPACE")
+		}
+		if inferencePoolName == "" {
+			inferencePoolName = os.Getenv("INFERENCE_POOL_NAME")
+		}
+
+		if inferencePoolNamespace == "" {
+			logger.Info("Error: --inference-pool-namespace or INFERENCE_POOL_NAMESPACE environment variable is required when --enable-ssrf-protection is true")
+			return
+		}
+		if inferencePoolName == "" {
+			logger.Info("Error: --inference-pool-name or INFERENCE_POOL_NAME environment variable is required when --enable-ssrf-protection is true")
+			return
+		}
+
+		logger.Info("SSRF protection enabled", "namespace", inferencePoolNamespace, "poolName", inferencePoolName)
+	}
+
 	// start reverse proxy HTTP server
 	targetURL, err := url.Parse("http://localhost:" + vLLMPort)
 	if err != nil {
@@ -60,7 +89,11 @@ func main() {
 		return
 	}
 
-	proxy := proxy.NewProxy(port, targetURL, connector, prefillerUseTLS)
+	proxy, err := proxy.NewProxy(port, targetURL, connector, prefillerUseTLS, enableSSRFProtection, inferencePoolNamespace, inferencePoolName)
+	if err != nil {
+		logger.Error(err, "Failed to create proxy")
+		return
+	}
 	if err := proxy.Start(ctx); err != nil {
 		logger.Error(err, "Failed to start proxy server")
 	}

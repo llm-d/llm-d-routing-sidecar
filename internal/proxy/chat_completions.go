@@ -42,5 +42,17 @@ func (s *Server) chatCompletionsHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// SSRF Protection: Check if the prefill target is allowed
+	if !s.allowlistValidator.IsAllowed(prefillPodHostPort) {
+		s.logger.Error(nil, "SSRF protection: prefill target not in allowlist",
+			"target", prefillPodHostPort,
+			"clientIP", r.RemoteAddr,
+			"userAgent", r.Header.Get("User-Agent"),
+			"requestPath", r.URL.Path)
+		http.Error(w, "Forbidden: prefill target not allowed by SSRF protection", http.StatusForbidden)
+		return
+	}
+
+	s.logger.V(4).Info("SSRF protection: prefill target allowed", "target", prefillPodHostPort)
 	s.runConnectorProtocol(w, r, prefillPodHostPort)
 }

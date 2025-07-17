@@ -2,6 +2,58 @@
 
 This project provides a reverse proxy redirecting incoming requests to the prefill worker specified in the `x-prefiller-url` HTTP request header. This project is experimental and will be removed in an upcoming iteration of the llm-d P/D disaggregation architecture.
 
+## Security Features
+
+### SSRF Protection
+
+The sidecar includes SSRF (Server-Side Request Forgery) protection that can be enabled via feature flag. When enabled, it watches a specific InferencePool resource and maintains an allowlist of valid prefill targets based on pods matching the InferencePool selectors.
+
+**Note**: The allowlist tracks **hosts/IPs only** (not specific ports), so any port on an allowed host is permitted. The `x-prefiller-host-port` header should be in `host:port` format.
+
+To enable SSRF protection:
+
+```bash
+# Using environment variables (recommended for Kubernetes deployments)
+export INFERENCE_POOL_NAMESPACE=your-namespace
+export INFERENCE_POOL_NAME=your-inference-pool
+./bin/llm-d-routing-sidecar -enable-ssrf-protection=true
+
+# Using command line flags (overrides environment variables)
+./bin/llm-d-routing-sidecar -enable-ssrf-protection=true -inference-pool-namespace=your-namespace -inference-pool-name=your-inference-pool
+```
+
+#### Kubernetes Deployment with Downward API
+
+For automatic namespace injection in Kubernetes deployments, use the downward API:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm-d-routing-sidecar
+spec:
+  template:
+    spec:
+      containers:
+      - name: sidecar
+        image: quay.io/llm-d/llm-d-routing-sidecar:latest
+        args:
+        - "-enable-ssrf-protection=true"
+        env:
+        - name: INFERENCE_POOL_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: INFERENCE_POOL_NAME
+          value: "my-inference-pool"  # Set to your specific InferencePool name
+```
+
+When SSRF protection is enabled:
+- Only prefill targets that match **hosts/IPs** from pods in the specified InferencePool resource are allowed (any port on allowed hosts)
+- Requests to unauthorized targets return HTTP 403 Forbidden
+- The allowlist is automatically updated when pods are added/removed/updated
+- When disabled (default), all targets are allowed for backward compatibility
+
 ## Getting Started
 
 ### Requirements
