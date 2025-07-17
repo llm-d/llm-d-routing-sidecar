@@ -53,14 +53,15 @@ type AllowlistValidator struct {
 	enabled       bool
 
 	// allowedTargets maps hostport -> bool for allowed prefill targets
-	allowedTargets set.Set[string]
-	mu             sync.RWMutex
+	allowedTargets   set.Set[string]
+	allowedTargetsMu sync.RWMutex
 
 	// watchers for cleanup
-	poolInformer cache.SharedInformer
-	podInformers map[string]cache.SharedInformer
-	podStopChans map[string]chan struct{} // individual stop channels for pod informers
-	stopCh       chan struct{}
+	poolInformer   cache.SharedInformer
+	podInformers   map[string]cache.SharedInformer
+	podStopChans   map[string]chan struct{} // individual stop channels for pod informers
+	podInformersMu sync.Mutex
+	stopCh         chan struct{}
 }
 
 // NewAllowlistValidator creates a new SSRF protection validator
@@ -157,7 +158,7 @@ func (av *AllowlistValidator) Stop() {
 	av.logger.Info("stopping allowlist validator")
 
 	// Stop all pod informers first
-	av.mu.Lock()
+	av.podInformersMu.Lock()
 	for poolName, stopCh := range av.podStopChans {
 		av.logger.V(4).Info("stopping pod informer", "pool", poolName)
 		close(stopCh)
@@ -165,7 +166,7 @@ func (av *AllowlistValidator) Stop() {
 	// Clear the maps
 	av.podStopChans = make(map[string]chan struct{})
 	av.podInformers = make(map[string]cache.SharedInformer)
-	av.mu.Unlock()
+	av.podInformersMu.Unlock()
 
 	// Stop the main pool informer
 	close(av.stopCh)
@@ -181,8 +182,8 @@ func (av *AllowlistValidator) IsAllowed(hostPort string) bool {
 	// Clean up the hostPort input
 	hostPort = av.normalizeHostPort(hostPort)
 
-	av.mu.RLock()
-	defer av.mu.RUnlock()
+	av.allowedTargetsMu.RLock()
+	defer av.allowedTargetsMu.RUnlock()
 
 	allowed := av.allowedTargets.Has(hostPort)
 	av.logger.V(4).Info("allowlist check", "hostPort", hostPort, "allowed", allowed)
@@ -224,13 +225,13 @@ func (av *AllowlistValidator) onInferencePoolDelete(obj interface{}) {
 	av.logger.Info("InferencePool deleted", "name", poolName)
 
 	// Stop watching pods for this pool
-	av.mu.Lock()
+	av.podInformersMu.Lock()
 	if stopCh, exists := av.podStopChans[poolName]; exists {
 		close(stopCh) // properly stop the informer
 		delete(av.podStopChans, poolName)
 	}
 	delete(av.podInformers, poolName)
-	av.mu.Unlock()
+	av.podInformersMu.Unlock()
 
 	// Remove targets associated with this pool (simplified - removes all and rebuilds)
 	av.rebuildAllowlist()
@@ -265,8 +266,8 @@ func (av *AllowlistValidator) updatePodsForPool(poolObj *unstructured.Unstructur
 
 // createPodInformer creates a new pod informer for the given selector
 func (av *AllowlistValidator) createPodInformer(poolName string, selector labels.Selector) {
-	av.mu.Lock()
-	defer av.mu.Unlock()
+	av.podInformersMu.Lock()
+	defer av.podInformersMu.Unlock()
 
 	// Stop existing informer if it exists
 	if _, exists := av.podInformers[poolName]; exists {
@@ -341,8 +342,8 @@ func (av *AllowlistValidator) onPodDelete(obj interface{}) {
 
 // rebuildAllowlist rebuilds the entire allowlist from current pod state
 func (av *AllowlistValidator) rebuildAllowlist() {
-	av.mu.Lock()
-	defer av.mu.Unlock()
+	av.allowedTargetsMu.Lock()
+	defer av.allowedTargetsMu.Unlock()
 
 	// Clear existing allowlist
 	av.allowedTargets = set.New[string]()
