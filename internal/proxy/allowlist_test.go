@@ -1,5 +1,5 @@
 /*
-Copyright 2025 IBM.
+Copyright 2025 The llm-d Authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package proxy
 import (
 	. "github.com/onsi/ginkgo/v2" // nolint:revive
 	. "github.com/onsi/gomega"    // nolint:revive
+	"k8s.io/utils/set"
 )
 
 var _ = Describe("AllowlistValidator", func() {
@@ -45,11 +46,11 @@ var _ = Describe("AllowlistValidator", func() {
 			validator = &AllowlistValidator{
 				enabled:   true,
 				namespace: "test-namespace",
-				allowedTargets: map[string]bool{
-					"10.244.1.100": true,
-					"valid-pod":    true,
-					"valid-pod.test-namespace.svc.cluster.local": true,
-				},
+				allowedTargets: set.New(
+					"10.244.1.100",
+					"valid-pod",
+					"valid-pod.test-namespace.svc.cluster.local",
+				),
 			}
 		})
 

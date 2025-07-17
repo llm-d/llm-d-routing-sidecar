@@ -43,8 +43,8 @@ func main() {
 	flag.StringVar(&connector, "connector", "nixl", "the P/D connector being used. Either nixl, nixlv2 or lmcache")
 	flag.BoolVar(&prefillerUseTLS, "prefiller-use-tls", false, "whether to use TLS when sending requests to prefillers")
 	flag.BoolVar(&enableSSRFProtection, "enable-ssrf-protection", false, "enable SSRF protection using InferencePool allowlisting")
-	flag.StringVar(&inferencePoolNamespace, "inference-pool-namespace", "", "the Kubernetes namespace to watch for InferencePool resources (defaults to INFERENCE_POOL_NAMESPACE env var)")
-	flag.StringVar(&inferencePoolName, "inference-pool-name", "", "the specific InferencePool name to watch (defaults to INFERENCE_POOL_NAME env var)")
+	flag.StringVar(&inferencePoolNamespace, "inference-pool-namespace", os.Getenv("INFERENCE_POOL_NAMESPACE"), "the Kubernetes namespace to watch for InferencePool resources (defaults to INFERENCE_POOL_NAMESPACE env var)")
+	flag.StringVar(&inferencePoolName, "inference-pool-name", os.Getenv("INFERENCE_POOL_NAME"), "the specific InferencePool name to watch (defaults to INFERENCE_POOL_NAME env var)")
 	klog.InitFlags(nil)
 	flag.Parse()
 
@@ -62,14 +62,6 @@ func main() {
 
 	// Determine namespace and pool name for SSRF protection
 	if enableSSRFProtection {
-		// Priority: command line flag > environment variable
-		if inferencePoolNamespace == "" {
-			inferencePoolNamespace = os.Getenv("INFERENCE_POOL_NAMESPACE")
-		}
-		if inferencePoolName == "" {
-			inferencePoolName = os.Getenv("INFERENCE_POOL_NAME")
-		}
-
 		if inferencePoolNamespace == "" {
 			logger.Info("Error: --inference-pool-namespace or INFERENCE_POOL_NAMESPACE environment variable is required when --enable-ssrf-protection is true")
 			return

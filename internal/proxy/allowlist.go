@@ -1,5 +1,5 @@
 /*
-Copyright 2025 IBM.
+Copyright 2025 The llm-d Authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/set"
 )
 
 const (
@@ -52,7 +53,7 @@ type AllowlistValidator struct {
 	enabled       bool
 
 	// allowedTargets maps hostport -> bool for allowed prefill targets
-	allowedTargets map[string]bool
+	allowedTargets set.Set[string]
 	mu             sync.RWMutex
 
 	// watchers for cleanup
@@ -90,7 +91,7 @@ func NewAllowlistValidator(enabled bool, namespace string, poolName string) (*Al
 		dynamicClient:  dynamicClient,
 		namespace:      namespace,
 		poolName:       poolName,
-		allowedTargets: make(map[string]bool),
+		allowedTargets: set.New[string](),
 		podInformers:   make(map[string]cache.SharedInformer),
 		podStopChans:   make(map[string]chan struct{}),
 		stopCh:         make(chan struct{}),
@@ -183,7 +184,7 @@ func (av *AllowlistValidator) IsAllowed(hostPort string) bool {
 	av.mu.RLock()
 	defer av.mu.RUnlock()
 
-	allowed := av.allowedTargets[hostPort]
+	allowed := av.allowedTargets.Has(hostPort)
 	av.logger.V(4).Info("allowlist check", "hostPort", hostPort, "allowed", allowed)
 	return allowed
 }
@@ -344,7 +345,7 @@ func (av *AllowlistValidator) rebuildAllowlist() {
 	defer av.mu.Unlock()
 
 	// Clear existing allowlist
-	av.allowedTargets = make(map[string]bool)
+	av.allowedTargets = set.New[string]()
 
 	// Rebuild from all pod informers
 	for poolName, informer := range av.podInformers {
@@ -370,12 +371,12 @@ func (av *AllowlistValidator) rebuildAllowlist() {
 func (av *AllowlistValidator) addPodToAllowlist(pod *unstructured.Unstructured, poolName string) {
 	podIP, _, _ := unstructured.NestedString(pod.Object, "status", "podIP")
 	if podIP != "" {
-		av.allowedTargets[podIP] = true
+		av.allowedTargets.Insert(podIP)
 	}
 
 	podName := pod.GetName()
 	if podName != "" {
-		av.allowedTargets[podName] = true
+		av.allowedTargets.Insert(podName)
 	}
 
 	av.logger.V(5).Info("added pod to allowlist", "pod", podName, "ip", podIP, "pool", poolName)
