@@ -60,7 +60,7 @@ type AllowlistValidator struct {
 	poolInformer   cache.SharedInformer
 	podInformers   map[string]cache.SharedInformer
 	podStopChans   map[string]chan struct{} // individual stop channels for pod informers
-	podInformersMu sync.Mutex
+	podInformersMu sync.RWMutex
 	stopCh         chan struct{}
 }
 
@@ -348,6 +348,8 @@ func (av *AllowlistValidator) rebuildAllowlist() {
 	// Clear existing allowlist
 	av.allowedTargets = set.New[string]()
 
+	av.podInformersMu.RLock()
+	defer av.podInformersMu.RUnlock()
 	// Rebuild from all pod informers
 	for poolName, informer := range av.podInformers {
 		store := informer.GetStore()
