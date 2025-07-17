@@ -1,6 +1,9 @@
 # llm-d-routing-sidecar
 
-This project provides a reverse proxy redirecting incoming requests to the prefill worker specified in the `x-prefiller-url` HTTP request header. This project is experimental and will be removed in an upcoming iteration of the llm-d P/D disaggregation architecture.
+This project provides a reverse proxy redirecting incoming requests to the prefill worker specified in the `x-prefiller-host-port` HTTP request header.
+
+
+> Note: this project is experimental and will be removed in an upcoming iteration of the llm-d P/D disaggregation architecture.
 
 ## Getting Started
 
@@ -64,7 +67,7 @@ Finally, in another terminal, send a chat completions request to the router prox
 ```
 $ curl  http://localhost:8000/v1/completions \
       -H "Content-Type: application/json" \
-      -H "x-prefiller-url: http://localhost:8002" \
+      -H "x-prefiller-host-port: http://localhost:8002" \
        -d '{
         "model": "Qwen/Qwen3-0.6B",
         "prompt": "Author-contribution statements and acknowledgements in research papers should state clearly and specifically whether, and to what extent, the authors used AI technologies such as ChatGPT in the preparation of their manuscript and analysis. They should also indicate which LLMs were used. This will alert editors and reviewers to scrutinize manuscripts more carefully for potential biases, inaccuracies and improper source crediting. Likewise, scientific journals should be transparent about their use of LLMs, for example when selecting submitted manuscripts. Mention the large language model based product mentioned in the paragraph above:"
@@ -108,16 +111,49 @@ Check the build was successful by running it locally:
 ```
 $ ./bin/llm-d-routing-sidecar -help
 Usage of ./bin/llm-d-routing-sidecar:
+  -add_dir_header
+        If true, adds the file directory to the header of the log messages
+  -alsologtostderr
+        log to standard error as well as files (no effect when -logtostderr=true)
+  -cert-path string
+        The path to the certificate for secure proxy. The certificate and private key files are assumed to be named tls.crt and tls.key, respectively. If not set, and secureProxy is enabled, then a self-signed certificate is used (for testing).
   -connector string
         the P/D connector being used. Either nixl, nixlv2 or lmcache (default "nixl")
+  -decoder-use-tls
+        whether to use TLS when sending requests to the decoder
+  -log_backtrace_at value
+        when logging hits line file:N, emit a stack trace
+  -log_dir string
+        If non-empty, write log files in this directory (no effect when -logtostderr=true)
+  -log_file string
+        If non-empty, use this log file (no effect when -logtostderr=true)
+  -log_file_max_size uint
+        Defines the maximum size a log file can grow to (no effect when -logtostderr=true). Unit is megabytes. If the value is 0, the maximum file size is unlimited. (default 1800)
+  -logtostderr
+        log to standard error instead of files (default true)
+  -one_output
+        If true, only write logs to their native severity level (vs also writing to each lower severity level; no effect when -logtostderr=true)
   -port string
         the port the sidecar is listening on (default "8000")
+  -prefiller-use-tls
+        whether to use TLS when sending requests to prefillers
+  -secure-proxy
+        Enables secure proxy. Defaults to true. (default true)
+  -skip_headers
+        If true, avoid header prefixes in the log messages
+  -skip_log_headers
+        If true, avoid headers when opening log files (no effect when -logtostderr=true)
+  -stderrthreshold value
+        logs at or above this threshold go to stderr when writing to files and stderr (no effect when -logtostderr=true or -alsologtostderr=true) (default 2)
+  -v value
+        number for the log level verbosity
   -vllm-port string
         the port vLLM is listening on (default "8001")
-...
+  -vmodule value
+        comma-separated list of pattern=N settings for file-filtered logging
 ```
 
-> **Note:** lmcache connector is deprecated.
+> **Note:** lmcache and nixl connectors are deprecated. Use nixlv2
 
 
 ## License
