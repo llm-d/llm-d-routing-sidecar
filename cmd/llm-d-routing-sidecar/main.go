@@ -1,5 +1,5 @@
 /*
-Copyright 2025 IBM.
+Copyright 2025 The llm-d Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,23 +28,19 @@ import (
 )
 
 func main() {
-	var (
-		port                   string
-		vLLMPort               string
-		connector              string
-		prefillerUseTLS        bool
-		enableSSRFProtection   bool
-		inferencePoolNamespace string
-		inferencePoolName      string
-	)
+	port := flag.String("port", "8000", "the port the sidecar is listening on")
+	vLLMPort := flag.String("vllm-port", "8001", "the port vLLM is listening on")
+	connector := flag.String("connector", "nixl", "the P/D connector being used. Either nixl, nixlv2 or lmcache")
+	prefillerUseTLS := flag.Bool("prefiller-use-tls", false, "whether to use TLS when sending requests to prefillers")
+	secureProxy := flag.Bool("secure-proxy", true, "Enables secure proxy. Defaults to true.")
+	certPath := flag.String(
+		"cert-path", "", "The path to the certificate for secure proxy. The certificate and private key files "+
+			"are assumed to be named tls.crt and tls.key, respectively. If not set, and secureProxy is enabled, "+
+			"then a self-signed certificate is used (for testing).")
+	enableSSRFProtection := flag.Bool("enable-ssrf-protection", false, "enable SSRF protection using InferencePool allowlisting")
+	inferencePoolNamespace := flag.String("inference-pool-namespace", os.Getenv("INFERENCE_POOL_NAMESPACE"), "the Kubernetes namespace to watch for InferencePool resources (defaults to INFERENCE_POOL_NAMESPACE env var)")
+	inferencePoolName := flag.String("inference-pool-name", os.Getenv("INFERENCE_POOL_NAME"), "the specific InferencePool name to watch (defaults to INFERENCE_POOL_NAME env var)")
 
-	flag.StringVar(&port, "port", "8000", "the port the sidecar is listening on")
-	flag.StringVar(&vLLMPort, "vllm-port", "8001", "the port vLLM is listening on")
-	flag.StringVar(&connector, "connector", "nixl", "the P/D connector being used. Either nixl, nixlv2 or lmcache")
-	flag.BoolVar(&prefillerUseTLS, "prefiller-use-tls", false, "whether to use TLS when sending requests to prefillers")
-	flag.BoolVar(&enableSSRFProtection, "enable-ssrf-protection", false, "enable SSRF protection using InferencePool allowlisting")
-	flag.StringVar(&inferencePoolNamespace, "inference-pool-namespace", os.Getenv("INFERENCE_POOL_NAMESPACE"), "the Kubernetes namespace to watch for InferencePool resources (defaults to INFERENCE_POOL_NAMESPACE env var)")
-	flag.StringVar(&inferencePoolName, "inference-pool-name", os.Getenv("INFERENCE_POOL_NAME"), "the specific InferencePool name to watch (defaults to INFERENCE_POOL_NAME env var)")
 	klog.InitFlags(nil)
 	flag.Parse()
 
@@ -54,19 +50,19 @@ func main() {
 	ctx := signals.SetupSignalHandler(context.Background())
 	logger := klog.FromContext(ctx)
 
-	if connector != proxy.ConnectorNIXLV1 && connector != proxy.ConnectorNIXLV2 && connector != proxy.ConnectorLMCache {
+	if *connector != proxy.ConnectorNIXLV1 && *connector != proxy.ConnectorNIXLV2 && *connector != proxy.ConnectorLMCache {
 		logger.Info("Error: --connector must either be 'nixl', 'nixlv2' or 'lmcache'")
 		return
 	}
 	logger.Info("p/d connector validated", "connector", connector)
 
 	// Determine namespace and pool name for SSRF protection
-	if enableSSRFProtection {
-		if inferencePoolNamespace == "" {
+	if *enableSSRFProtection {
+		if *inferencePoolNamespace == "" {
 			logger.Info("Error: --inference-pool-namespace or INFERENCE_POOL_NAMESPACE environment variable is required when --enable-ssrf-protection is true")
 			return
 		}
-		if inferencePoolName == "" {
+		if *inferencePoolName == "" {
 			logger.Info("Error: --inference-pool-name or INFERENCE_POOL_NAME environment variable is required when --enable-ssrf-protection is true")
 			return
 		}
@@ -75,16 +71,22 @@ func main() {
 	}
 
 	// start reverse proxy HTTP server
-	targetURL, err := url.Parse("http://localhost:" + vLLMPort)
+	targetURL, err := url.Parse("http://localhost:" + *vLLMPort)
 	if err != nil {
 		logger.Error(err, "Failed to create targetURL")
 		return
 	}
 
-	proxy, err := proxy.NewProxy(port, targetURL, connector, prefillerUseTLS, enableSSRFProtection, inferencePoolNamespace, inferencePoolName)
+	config := proxy.Config{
+		Connector:       *connector,
+		PrefillerUseTLS: *prefillerUseTLS,
+		SecureProxy:     *secureProxy,
+		CertPath:        *certPath,
+	}
+
+	proxy, err := proxy.NewProxy(*port, targetURL, config)
 	if err != nil {
 		logger.Error(err, "Failed to create proxy")
-		return
 	}
 	if err := proxy.Start(ctx); err != nil {
 		logger.Error(err, "Failed to start proxy server")

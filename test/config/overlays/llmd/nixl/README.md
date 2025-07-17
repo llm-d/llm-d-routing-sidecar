@@ -1,7 +1,7 @@
-# Single LMCache KVConnector
+# Single NIXL KVConnector
 
 To deploy:
 
 ```
-$ kustomize build test/config/overlays/fmass/nixl | kubectl apply -f -
+$ kustomize build test/config/overlays/llmd/nixl | kubectl apply -f -
 ```

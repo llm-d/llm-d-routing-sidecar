@@ -1,5 +1,5 @@
 /*
-Copyright 2025 IBM.
+Copyright 2025 The llm-d Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -65,7 +65,8 @@ var _ = Describe("NIXL Connector (v2)", func() {
 		url, err := url.Parse(decodeBackend.URL)
 		Expect(err).ToNot(HaveOccurred())
 		decodeURL = url
-		proxy, err = NewProxy("0", decodeURL, ConnectorNIXLV2, false, false, "test-namespace", "test-pool") // port 0 to automatically choose one that's available.
+		cfg := Config{Connector: ConnectorNIXLV2}
+		proxy, err = NewProxy("0", decodeURL, cfg) // port 0 to automatically choose one that's available.
 		Expect(err).ToNot(HaveOccurred())
 	})
 
