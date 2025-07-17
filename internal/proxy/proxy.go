@@ -180,7 +180,8 @@ func (s *Server) prefillerProxyHandler(hostPort string) (http.Handler, error) {
 	if err != nil {
 		s.logger.Error(err, "failed to parse URL", "hostPort", hostPort)
 		return nil, err
-	} else if err := validateTarget(u.Hostname()); err != nil {
+	}
+	if err := validateTarget(u.Hostname()); err != nil {
 		s.logger.Error(err, "invalid target", "hostPort", hostPort)
 		return nil, err
 	}
