@@ -30,7 +30,7 @@ import (
 func main() {
 	port := flag.String("port", "8000", "the port the sidecar is listening on")
 	vLLMPort := flag.String("vllm-port", "8001", "the port vLLM is listening on")
-	connector := flag.String("connector", "nixl", "the P/D connector being used. Either nixl, nixlv2 or lmcache")
+	connector := flag.String("connector", "nixlv2", "the P/D connector being used. Either nixl, nixlv2 or lmcache")
 	prefillerUseTLS := flag.Bool("prefiller-use-tls", false, "whether to use TLS when sending requests to prefillers")
 	decoderUseTLS := flag.Bool("decoder-use-tls", false, "whether to use TLS when sending requests to the decoder")
 	secureProxy := flag.Bool("secure-proxy", true, "Enables secure proxy. Defaults to true.")
@@ -54,6 +54,9 @@ func main() {
 	if *connector != proxy.ConnectorNIXLV1 && *connector != proxy.ConnectorNIXLV2 && *connector != proxy.ConnectorLMCache {
 		logger.Info("Error: --connector must either be 'nixl', 'nixlv2' or 'lmcache'")
 		return
+	}
+	if *connector == proxy.ConnectorNIXLV1 {
+		logger.Info("Warning: nixl connector is deprecated and will be removed in a future release in favor of --connector=nixlv2")
 	}
 	logger.Info("p/d connector validated", "connector", connector)
 
