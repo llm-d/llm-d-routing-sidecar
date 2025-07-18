@@ -74,14 +74,20 @@ type Config struct {
 	// CertPath is the location of the TLS certificates
 	CertPath string
 
-	// enableSSRFProtection enables SSRF protection.
-	enableSSRFProtection bool
+	// PrefillerInsecureSkipVerify configure the proxy to skip TLS verification for requests to prefiller.
+	PrefillerInsecureSkipVerify bool
 
-	// inferencePoolNamespace InferencePool object namespace.
-	inferencePoolNamespace string
+	// DecoderInsecureSkipVerify configure the proxy to skip TLS verification for requests to decoder.
+	DecoderInsecureSkipVerify bool
 
-	// inferencePoolNamespace InferencePool object name.
-	inferencePoolName string
+	// EnableSSRFProtection enables SSRF protection.
+	EnableSSRFProtection bool
+
+	// InferencePoolNamespace InferencePool object namespace.
+	InferencePoolNamespace string
+
+	// InferencePoolName InferencePool object name.
+	InferencePoolName string
 }
 
 type protocolRunner func(http.ResponseWriter, *http.Request, string)
@@ -107,7 +113,7 @@ func NewProxy(port string, decodeURL *url.URL, config Config) (*Server, error) {
 	cache, _ := lru.New[string, http.Handler](16) // nolint:all
 
 	// Create SSRF protection validator
-	validator, err := NewAllowlistValidator(config.enableSSRFProtection, config.inferencePoolNamespace, config.inferencePoolName)
+	validator, err := NewAllowlistValidator(config.EnableSSRFProtection, config.InferencePoolNamespace, config.InferencePoolName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SSRF protection validator: %w", err)
 	}
@@ -159,7 +165,13 @@ func (s *Server) Start(ctx context.Context) error {
 	// Configure handlers
 	mux := s.createRoutes()
 
-	server := &http.Server{Handler: mux}
+	server := &http.Server{
+		Handler: mux,
+		// No ReadTimeout/WriteTimeout for LLM inference - can take hours for large contexts
+		IdleTimeout:       300 * time.Second, // 5 minutes for keep-alive connections
+		ReadHeaderTimeout: 30 * time.Second,  // Reasonable for headers only
+		MaxHeaderBytes:    1 << 20,           // 1 MB for headers is sufficient
+	}
 
 	// Create TLS certificates
 	if s.config.SecureProxy {
@@ -175,6 +187,15 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 		server.TLSConfig = &tls.Config{
 			Certificates: []tls.Certificate{cert},
+			MinVersion:   tls.VersionTLS12,
+			CipherSuites: []uint16{
+				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+				tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+			},
 		}
 		logger.Info("server TLS configured")
 	}
@@ -223,6 +244,22 @@ func (s *Server) createRoutes() *http.ServeMux {
 
 	// Passthrough decoder handler
 	decoderProxy := httputil.NewSingleHostReverseProxy(s.decoderURL)
+	if s.decoderURL.Scheme == "https" {
+		decoderProxy.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: s.config.DecoderInsecureSkipVerify,
+				MinVersion:         tls.VersionTLS12,
+				CipherSuites: []uint16{
+					tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+					tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+					tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+					tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+					tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+					tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+				},
+			},
+		}
+	}
 	decoderProxy.ErrorHandler = func(res http.ResponseWriter, _ *http.Request, err error) {
 
 		// Log errors from the decoder proxy
@@ -255,8 +292,24 @@ func (s *Server) prefillerProxyHandler(hostPort string) (http.Handler, error) {
 		return nil, err
 	}
 
-	proxy = httputil.NewSingleHostReverseProxy(u)
-	s.prefillerProxies.Add(hostPort, proxy)
+	newProxy := httputil.NewSingleHostReverseProxy(u)
+	if u.Scheme == "https" {
+		newProxy.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: s.config.PrefillerInsecureSkipVerify,
+				MinVersion:         tls.VersionTLS12,
+				CipherSuites: []uint16{
+					tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+					tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+					tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+					tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+					tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+					tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+				},
+			},
+		}
+	}
+	s.prefillerProxies.Add(hostPort, newProxy)
 
-	return proxy, nil
+	return newProxy, nil
 }

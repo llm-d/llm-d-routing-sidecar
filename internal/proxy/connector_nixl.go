@@ -90,7 +90,7 @@ func (s *Server) runNIXLProtocolV1(w http.ResponseWriter, r *http.Request, prefi
 	}
 
 	// 2. Forward request to prefiller
-	s.logger.Info("sending request to prefiller", "hostPort", prefillPodHostPort, "body", string(pbody))
+	s.logger.V(5).Info("sending request to prefiller", "hostPort", prefillPodHostPort, "body", string(pbody))
 	pw := &bufferedResponseWriter{}
 	prefillHandler.ServeHTTP(pw, preq)
 

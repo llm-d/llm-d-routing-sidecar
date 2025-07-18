@@ -171,8 +171,16 @@ Usage of ./bin/llm-d-routing-sidecar:
         The path to the certificate for secure proxy. The certificate and private key files are assumed to be named tls.crt and tls.key, respectively. If not set, and secureProxy is enabled, then a self-signed certificate is used (for testing).
   -connector string
         the P/D connector being used. Either nixl, nixlv2 or lmcache (default "nixl")
+  -decoder-tls-insecure-skip-verify
+        configures the proxy to skip TLS verification for requests to decoder
   -decoder-use-tls
         whether to use TLS when sending requests to the decoder
+  -enable-ssrf-protection
+        enable SSRF protection using InferencePool allowlisting
+  -inference-pool-name string
+        the specific InferencePool name to watch (defaults to INFERENCE_POOL_NAME env var)
+  -inference-pool-namespace string
+        the Kubernetes namespace to watch for InferencePool resources (defaults to INFERENCE_POOL_NAMESPACE env var)
   -log_backtrace_at value
         when logging hits line file:N, emit a stack trace
   -log_dir string
@@ -187,6 +195,8 @@ Usage of ./bin/llm-d-routing-sidecar:
         If true, only write logs to their native severity level (vs also writing to each lower severity level; no effect when -logtostderr=true)
   -port string
         the port the sidecar is listening on (default "8000")
+  -prefiller-tls-insecure-skip-verify
+        configures the proxy to skip TLS verification for requests to prefiller
   -prefiller-use-tls
         whether to use TLS when sending requests to prefillers
   -secure-proxy

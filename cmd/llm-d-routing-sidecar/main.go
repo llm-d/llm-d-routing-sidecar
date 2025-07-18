@@ -33,6 +33,8 @@ func main() {
 	connector := flag.String("connector", "nixl", "the P/D connector being used. Either nixl, nixlv2 or lmcache")
 	prefillerUseTLS := flag.Bool("prefiller-use-tls", false, "whether to use TLS when sending requests to prefillers")
 	decoderUseTLS := flag.Bool("decoder-use-tls", false, "whether to use TLS when sending requests to the decoder")
+	prefillerInsecureSkipVerify := flag.Bool("prefiller-tls-insecure-skip-verify", false, "configures the proxy to skip TLS verification for requests to prefiller")
+	decoderInsecureSkipVerify := flag.Bool("decoder-tls-insecure-skip-verify", false, "configures the proxy to skip TLS verification for requests to decoder")
 	secureProxy := flag.Bool("secure-proxy", true, "Enables secure proxy. Defaults to true.")
 	certPath := flag.String(
 		"cert-path", "", "The path to the certificate for secure proxy. The certificate and private key files "+
@@ -83,10 +85,15 @@ func main() {
 	}
 
 	config := proxy.Config{
-		Connector:       *connector,
-		PrefillerUseTLS: *prefillerUseTLS,
-		SecureProxy:     *secureProxy,
-		CertPath:        *certPath,
+		Connector:                   *connector,
+		PrefillerUseTLS:             *prefillerUseTLS,
+		SecureProxy:                 *secureProxy,
+		CertPath:                    *certPath,
+		PrefillerInsecureSkipVerify: *prefillerInsecureSkipVerify,
+		DecoderInsecureSkipVerify:   *decoderInsecureSkipVerify,
+		EnableSSRFProtection:        *enableSSRFProtection,
+		InferencePoolNamespace:      *inferencePoolNamespace,
+		InferencePoolName:           *inferencePoolName,
 	}
 
 	proxy, err := proxy.NewProxy(*port, targetURL, config)
