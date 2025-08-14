@@ -18,6 +18,9 @@ package proxy
 
 import (
 	"net/http"
+
+	"github.com/llm-d/llm-d-routing-sidecar/internal/tracing"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 var (
@@ -29,8 +32,15 @@ var (
 )
 
 func (s *Server) chatCompletionsHandler(w http.ResponseWriter, r *http.Request) {
-	prefillPodHostPort := r.Header.Get(requestHeaderPrefillHostPort)
+	ctx, span := tracing.StartSpan(r.Context(), "routing_proxy.request")
+	defer span.End()
 
+	// Basic attributes only
+	span.SetAttributes(
+		attribute.String("llm_d.proxy.connector", s.connector),
+	)
+
+	prefillPodHostPort := r.Header.Get(requestHeaderPrefillHostPort)
 	if prefillPodHostPort == "" {
 		// backward compatible behavior: to remove in next release
 		prefillPodHostPort = r.Header.Get(requestHeaderPrefillURL)
@@ -38,6 +48,8 @@ func (s *Server) chatCompletionsHandler(w http.ResponseWriter, r *http.Request) 
 
 	if prefillPodHostPort == "" {
 		s.logger.V(4).Info("skip disaggregated prefill")
+		// Update the request context for downstream handlers
+		r = r.WithContext(ctx)
 		s.decoderProxy.ServeHTTP(w, r)
 		return
 	}
@@ -54,5 +66,7 @@ func (s *Server) chatCompletionsHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	s.logger.V(4).Info("SSRF protection: prefill target allowed", "target", prefillPodHostPort)
+
+	r = r.WithContext(ctx)
 	s.runConnectorProtocol(w, r, prefillPodHostPort)
 }
