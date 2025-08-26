@@ -31,6 +31,7 @@ import (
 
 	"github.com/go-logr/logr"
 	lru "github.com/hashicorp/golang-lru/v2"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"k8s.io/klog/v2"
 )
 
@@ -165,8 +166,11 @@ func (s *Server) Start(ctx context.Context) error {
 	// Configure handlers
 	mux := s.createRoutes()
 
+	// Wrap the server with OpenTelemetry HTTP instrumentation
+	handler := otelhttp.NewHandler(mux, "routing-proxy-server")
+
 	server := &http.Server{
-		Handler: mux,
+		Handler: handler,
 		// No ReadTimeout/WriteTimeout for LLM inference - can take hours for large contexts
 		IdleTimeout:       300 * time.Second, // 5 minutes for keep-alive connections
 		ReadHeaderTimeout: 30 * time.Second,  // Reasonable for headers only

@@ -53,7 +53,6 @@ func main() {
 	ctx := signals.SetupSignalHandler(context.Background())
 	logger := klog.FromContext(ctx)
 
-
 	if *connector != proxy.ConnectorNIXLV1 && *connector != proxy.ConnectorNIXLV2 && *connector != proxy.ConnectorLMCache {
 		logger.Info("Error: --connector must either be 'nixl', 'nixlv2' or 'lmcache'")
 		return
