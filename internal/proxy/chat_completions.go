@@ -32,7 +32,7 @@ var (
 )
 
 func (s *Server) chatCompletionsHandler(w http.ResponseWriter, r *http.Request) {
-	tracer := otel.GetTracerProvider().Tracer("llm-d-routing")
+	tracer := otel.GetTracerProvider().Tracer("llm-d-routing-sidecar")
 	ctx, span := tracer.Start(r.Context(), "routing_proxy.request")
 	defer span.End()
 
@@ -40,6 +40,7 @@ func (s *Server) chatCompletionsHandler(w http.ResponseWriter, r *http.Request) 
 	span.SetAttributes(
 		attribute.String("component", "llm-d-routing-sidecar"),
 		attribute.String("operation", "route_request"),
+		attribute.String("llm_d.proxy.connector", s.config.Connector),
 	)
 
 	prefillPodHostPort := r.Header.Get(requestHeaderPrefillHostPort)
