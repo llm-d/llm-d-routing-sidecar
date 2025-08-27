@@ -23,9 +23,23 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 func (s *Server) runNIXLProtocolV2(w http.ResponseWriter, r *http.Request, prefillPodHostPort string) {
+	// Create span for NIXL V2 protocol execution
+	tracer := otel.GetTracerProvider().Tracer("llm-d-routing-sidecar")
+	ctx, span := tracer.Start(r.Context(), "routing_proxy.nixl_v2_protocol")
+	defer span.End()
+	
+	span.SetAttributes(
+		attribute.String("component", "llm-d-routing-sidecar"),
+		attribute.String("operation", "nixl_v2_disaggregation"),
+		attribute.String("llm_d.proxy.connector", "nixlv2"),
+		attribute.String("llm_d.prefill.target_host", prefillPodHostPort),
+	)
+	
 	s.logger.V(4).Info("running NIXL protocol V2", "url", prefillPodHostPort)
 
 	// Read request body
@@ -57,10 +71,15 @@ func (s *Server) runNIXLProtocolV2(w http.ResponseWriter, r *http.Request, prefi
 	uuidStr := uuid.String()
 
 	// Prefill Stage
+	_, prefillSpan := tracer.Start(ctx, "routing_proxy.nixl_v2_prefill")
+	prefillSpan.SetAttributes(
+		attribute.String("component", "llm-d-routing-sidecar"),
+		attribute.String("operation", "nixl_v2_prefill_stage"),
+		attribute.String("llm_d.nixl.stage", "prefill"),
+	)
 
 	// 1. Prepare prefill request
-	ctx := r.Context()
-	preq := r.Clone(ctx)
+	preq := r.Clone(r.Context())
 
 	preq.Header.Add(requestHeaderRequestID, uuidStr)
 
@@ -131,7 +150,7 @@ func (s *Server) runNIXLProtocolV2(w http.ResponseWriter, r *http.Request, prefi
 	// Decode Stage
 
 	// 1. Prepare decode request
-	dreq := r.Clone(ctx)
+	dreq := r.Clone(r.Context())
 
 	dreq.Header.Add(requestHeaderRequestID, uuidStr)
 
@@ -159,7 +178,6 @@ func (s *Server) runNIXLProtocolV2(w http.ResponseWriter, r *http.Request, prefi
 	dreq.ContentLength = int64(len(dbody))
 
 	// 2. Forward to local decoder.
-
 	s.logger.V(5).Info("sending request to decoder", "body", string(dbody))
 	s.decoderProxy.ServeHTTP(w, dreq)
 }
