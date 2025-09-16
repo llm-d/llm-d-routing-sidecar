@@ -21,8 +21,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-
-	"github.com/google/uuid"
 )
 
 func (s *Server) runNIXLProtocolV1(w http.ResponseWriter, r *http.Request, prefillPodHostPort string) {
@@ -46,23 +44,11 @@ func (s *Server) runNIXLProtocolV1(w http.ResponseWriter, r *http.Request, prefi
 		return
 	}
 
-	// Generate unique request UUID
-	uuid, err := uuid.NewUUID()
-	if err != nil {
-		if err := errorBadGateway(err, w); err != nil {
-			s.logger.Error(err, "failed to send error response to client")
-		}
-		return
-	}
-	uuidStr := uuid.String()
-
 	// Send request to prefill pod
 
 	// 1. Prepare request
 	ctx := r.Context()
 	preq := r.Clone(ctx)
-
-	preq.Header.Add(requestHeaderRequestID, uuidStr)
 
 	streamValue, streamOk := completionRequest[requestFieldStream]
 	streamOptionsValue, streamOptionsOk := completionRequest[requestFieldStreamOptions]
@@ -144,8 +130,6 @@ func (s *Server) runNIXLProtocolV1(w http.ResponseWriter, r *http.Request, prefi
 
 	// 2. Prepare decode request
 	dreq := r.Clone(ctx)
-
-	dreq.Header.Add(requestHeaderRequestID, uuidStr)
 
 	delete(completionRequest, requestFieldDoRemoteDecode)
 	delete(completionRequest, requestFieldStream)

@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/google/uuid"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"k8s.io/klog/v2"
 )
@@ -163,7 +164,7 @@ func (s *Server) Start(ctx context.Context) error {
 	s.addr = ln.Addr()
 
 	// Configure handlers
-	mux := s.createRoutes()
+	mux := s.requestIDMiddleware(s.createRoutes())
 
 	server := &http.Server{
 		Handler: mux,
@@ -275,6 +276,20 @@ func (s *Server) createRoutes() *http.ServeMux {
 	mux.Handle("/", s.decoderProxy)
 
 	return mux
+}
+
+func (s *Server) requestIDMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID := r.Header.Get(requestHeaderRequestID)
+		if requestID == "" {
+			requestID = uuid.New().String()
+			r.Header.Set(requestHeaderRequestID, requestID)
+		}
+
+		w.Header().Set(requestHeaderRequestID, requestID)
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) prefillerProxyHandler(hostPort string) (http.Handler, error) {
