@@ -282,7 +282,15 @@ func (s *Server) requestIDMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestID := r.Header.Get(requestHeaderRequestID)
 		if requestID == "" {
-			requestID = uuid.New().String()
+			uuid, err := uuid.NewRandom()
+			if err != nil {
+				if err := errorBadGateway(err, w); err != nil {
+					s.logger.Error(err, "failed to send error response to client")
+				}
+				return
+			}
+			requestID = uuid.String()
+
 			r.Header.Set(requestHeaderRequestID, requestID)
 		}
 
