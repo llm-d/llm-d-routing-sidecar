@@ -58,6 +58,9 @@ const (
 
 	// ConnectorLMCache enables (now deprecated) P/D LMCache protocol
 	ConnectorLMCache = "lmcache"
+
+	// ConnectorSGLang enables SGLang P/D disaggregation protocol
+	ConnectorSGLang = "sglang"
 )
 
 // Config represents the proxy server configuration
@@ -131,6 +134,8 @@ func NewProxy(port string, decodeURL *url.URL, config Config) (*Server, error) {
 		server.runConnectorProtocol = server.runLMCacheProtocol
 	case ConnectorNIXLV1:
 		server.runConnectorProtocol = server.runNIXLProtocolV1
+	case ConnectorSGLang:
+		server.runConnectorProtocol = server.runSGLangProtocol
 	case ConnectorNIXLV2:
 		fallthrough
 	default:
@@ -241,6 +246,7 @@ func (s *Server) createRoutes() *http.ServeMux {
 	})
 	mux.HandleFunc("POST "+ChatCompletionsPath, s.chatCompletionsHandler) // /v1/chat/completions (openai)
 	mux.HandleFunc("POST "+CompletionsPath, s.chatCompletionsHandler)     // /v1/completions (legacy)
+	mux.HandleFunc("POST /generate", s.chatCompletionsHandler)            // /generate (sglang)
 
 	// Passthrough decoder handler
 	decoderProxy := httputil.NewSingleHostReverseProxy(s.decoderURL)
