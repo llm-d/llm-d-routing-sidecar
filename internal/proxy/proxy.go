@@ -88,6 +88,10 @@ type Config struct {
 
 	// InferencePoolName InferencePool object name.
 	InferencePoolName string
+
+	// EnablePrefillerSampling configures the proxy to randomly choose from the set
+	// of provided prefill hosts instead of always using the first one.
+	EnablePrefillerSampling bool
 }
 
 type protocolRunner func(http.ResponseWriter, *http.Request, string)
@@ -265,7 +269,7 @@ func (s *Server) createRoutes() *http.ServeMux {
 		// Log errors from the decoder proxy
 		switch {
 		case errors.Is(err, syscall.ECONNREFUSED):
-			s.logger.Error(err, "waiting for vLLM to be ready")
+			s.logger.Error(err, "waiting for model server to be ready")
 		default:
 			s.logger.Error(err, "http: proxy error")
 		}
