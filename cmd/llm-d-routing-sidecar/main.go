@@ -60,7 +60,7 @@ func main() {
 	if *connector == proxy.ConnectorNIXLV1 {
 		logger.Info("Warning: nixl connector is deprecated and will be removed in a future release in favor of --connector=nixlv2")
 	}
-	logger.Info("p/d connector validated", "connector", connector)
+	logger.Info("p/d connector validated", "connector", *connector)
 
 	// Determine namespace and pool name for SSRF protection
 	if *enableSSRFProtection {
