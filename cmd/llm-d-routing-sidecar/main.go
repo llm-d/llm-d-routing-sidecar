@@ -29,8 +29,8 @@ import (
 
 func main() {
 	port := flag.String("port", "8000", "the port the sidecar is listening on")
-	vLLMPort := flag.String("vllm-port", "8001", "the port vLLM is listening on")
-	connector := flag.String("connector", "nixlv2", "the P/D connector being used. Either nixl, nixlv2 or lmcache")
+	vLLMPort := flag.String("vllm-port", "8001", "the port vLLM is listening on (also used for SGLang)")
+	connector := flag.String("connector", "nixlv2", "the P/D connector being used. Either nixl, nixlv2, lmcache, or sglang")
 	prefillerUseTLS := flag.Bool("prefiller-use-tls", false, "whether to use TLS when sending requests to prefillers")
 	decoderUseTLS := flag.Bool("decoder-use-tls", false, "whether to use TLS when sending requests to the decoder")
 	prefillerInsecureSkipVerify := flag.Bool("prefiller-tls-insecure-skip-verify", false, "configures the proxy to skip TLS verification for requests to prefiller")
@@ -53,8 +53,8 @@ func main() {
 	ctx := signals.SetupSignalHandler(context.Background())
 	logger := klog.FromContext(ctx)
 
-	if *connector != proxy.ConnectorNIXLV1 && *connector != proxy.ConnectorNIXLV2 && *connector != proxy.ConnectorLMCache {
-		logger.Info("Error: --connector must either be 'nixl', 'nixlv2' or 'lmcache'")
+	if *connector != proxy.ConnectorNIXLV1 && *connector != proxy.ConnectorNIXLV2 && *connector != proxy.ConnectorLMCache && *connector != proxy.ConnectorSGLang {
+		logger.Info("Error: --connector must either be 'nixl', 'nixlv2', 'lmcache', or 'sglang'")
 		return
 	}
 	if *connector == proxy.ConnectorNIXLV1 {
@@ -81,6 +81,7 @@ func main() {
 	if *decoderUseTLS {
 		scheme = "https"
 	}
+
 	targetURL, err := url.Parse(scheme + "://localhost:" + *vLLMPort)
 	if err != nil {
 		logger.Error(err, "failed to create targetURL")
