@@ -1,10 +1,10 @@
 # llm-d-routing-sidecar
 
-[!WARNING]
-The code of the routing sidecar has been moved to the [llm-d-inference-scheduler repository](https://github.com/llm-d/llm-d-inference-scheduler),
- under the `cmd/pd_sidecar` and `pkg/sidecar` directories. This repository is deprecated and shall soon be archived.
- All future development will done under the llm-d-inference-scheduler repository.
- Please do **not** submit issues or PRs against this repository.
+> [!WARNING]
+> The code of the routing sidecar has been moved to the [llm-d-inference-scheduler repository](https://github.com/llm-d/llm-d-inference-scheduler),
+> under the `cmd/pd_sidecar` and `pkg/sidecar` directories. This repository is deprecated and shall soon be archived.
+> All future development will done under the llm-d-inference-scheduler repository.
+> Please do **not** submit issues or PRs against this repository.
 
 This project provides a reverse proxy redirecting incoming requests to the prefill worker specified in the `x-prefiller-host-port` HTTP request header.
 
